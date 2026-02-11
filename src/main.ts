@@ -23,7 +23,7 @@ app.use(
         const url = req.url ?? "";
         return (
           url === "/health" ||
-          url.startsWith("/t/") ||
+          url.startsWith("/pixel/") ||
           url.startsWith("/badge/")
         );
       },
@@ -56,8 +56,8 @@ const apiLimiter = rateLimit({
 });
 
 // Routes
-app.get("/t/:label.gif", pixelLimiter, pixelGifRoute);
-app.get("/t/:label.svg", pixelLimiter, pixelSvgRoute);
+app.get("/pixel/:label.gif", pixelLimiter, pixelGifRoute);
+app.get("/pixel/:label.svg", pixelLimiter, pixelSvgRoute);
 app.get("/badge/:label.svg", pixelLimiter, badgeRoute);
 app.get("/health", healthRoute);
 app.use("/api", apiLimiter, statsRouter);

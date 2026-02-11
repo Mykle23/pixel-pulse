@@ -10,7 +10,7 @@ function setNoCacheHeaders(res: Response): void {
 }
 
 /**
- * GET /t/:label.gif
+ * GET /pixel/:label.gif
  * Serves a 1x1 transparent GIF and registers the visit asynchronously.
  */
 export function pixelGifRoute(req: Request, res: Response): void {
@@ -30,7 +30,7 @@ export function pixelGifRoute(req: Request, res: Response): void {
 }
 
 /**
- * GET /t/:label.svg
+ * GET /pixel/:label.svg
  * Serves a 1x1 transparent SVG and registers the visit asynchronously.
  */
 export function pixelSvgRoute(req: Request, res: Response): void {
