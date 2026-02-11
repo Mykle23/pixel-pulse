@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+@theme {
+  /* Observatory: signal monitoring in the dark */
+
+  /* Surfaces — near-black base, whisper-quiet elevation shifts */
+  --color-canvas: #08080d;
+  --color-surface-1: #0f0f16;
+  --color-surface-2: #16161f;
+  --color-surface-3: #1e1e28;
+  --color-surface-inset: #060609;
+
+  /* Text — four-level hierarchy */
+  --color-ink: #e8e8ed;
+  --color-ink-secondary: #9d9daa;
+  --color-ink-tertiary: #6b6b78;
+  --color-ink-muted: #44444f;
+
+  /* Borders — rgba progression, felt not seen */
+  --color-edge: rgba(255, 255, 255, 0.06);
+  --color-edge-subtle: rgba(255, 255, 255, 0.03);
+  --color-edge-strong: rgba(255, 255, 255, 0.1);
+  --color-edge-focus: rgba(96, 165, 250, 0.5);
+
+  /* Signal: the primary accent — electric blue, cold */
+  --color-signal: #3b82f6;
+  --color-signal-muted: rgba(59, 130, 246, 0.15);
+  --color-signal-text: #60a5fa;
+
+  /* Human: green phosphor — alive, organic */
+  --color-human: #22c55e;
+  --color-human-muted: rgba(34, 197, 94, 0.12);
+  --color-human-text: #4ade80;
+
+  /* Bot: amber — detected, suspicious */
+  --color-bot: #f59e0b;
+  --color-bot-muted: rgba(245, 158, 11, 0.12);
+  --color-bot-text: #fbbf24;
+
+  /* Danger */
+  --color-danger: #ef4444;
+  --color-danger-muted: rgba(239, 68, 68, 0.12);
+
+  /* Typography */
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Spacing scale (4px base) */
+  --spacing-px: 1px;
+  --spacing-0_5: 2px;
+  --spacing-1: 4px;
+  --spacing-1_5: 6px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+
+  /* Border radius — technical, not friendly */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+/* Base */
+html {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+/* Scrollbar — minimal, dark */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* Utility: pulse animation for active signals */
+@keyframes signal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.animate-signal-pulse {
+  animation: signal-pulse 2s ease-in-out infinite;
+}
