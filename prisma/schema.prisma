@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Visit {
+  id         String   @id @default(cuid())
+  label      String
+  ipHash     String
+  country    String?
+  city       String?
+  userAgent  String?
+  browser    String?
+  os         String?
+  deviceType String?
+  isBot      Boolean  @default(false)
+  botName    String?
+  referer    String?
+  createdAt  DateTime @default(now())
+
+  @@index([label])
+  @@index([createdAt])
+  @@index([label, createdAt])
+}
