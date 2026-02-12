@@ -495,19 +495,7 @@ pixel-pulse/
 
 </div>
 
-| Category | Technology |
-| :--- | :--- |
-| **Runtime** | Node.js 20+ |
-| **Language** | TypeScript 5.9 (strict mode) |
-| **Backend** | Express 5, Pino, Helmet, express-rate-limit |
-| **Frontend** | React 19, Vite 7, TailwindCSS 4 |
-| **Database** | Prisma 7 + SQLite (via libSQL adapter) |
-| **Charts** | Recharts, Nivo (treemap), react-simple-maps |
-| **Badges** | badge-maker (shields.io rendering engine) |
-| **Geo** | geoip-lite (local MaxMind database) |
-| **Bot Detection** | isbot |
-| **UA Parsing** | ua-parser-js |
-| **Dev Tools** | ESLint 9, tsx (hot reload), pino-pretty |
+
 
 ---
 
