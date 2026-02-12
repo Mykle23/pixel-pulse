@@ -3,6 +3,8 @@ export interface LabelSummary {
   total: number;
   unique: number;
   bots: number;
+  lastSeen: string;
+  topCountry: string;
 }
 
 export interface StatsOverview {
@@ -43,6 +45,11 @@ export interface RefererEntry {
   visits: number;
 }
 
+export interface OsEntry {
+  os: string;
+  visits: number;
+}
+
 export interface LabelStats {
   label: string;
   total: number;
@@ -52,6 +59,7 @@ export interface LabelStats {
   countries: CountryEntry[];
   devices: DeviceEntry[];
   browsers: BrowserEntry[];
+  operatingSystems: OsEntry[];
   topBots: BotEntry[];
   referers: RefererEntry[];
 }

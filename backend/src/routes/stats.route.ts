@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { type Router as RouterType, Router } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../db.js";
 import { env } from "../config/env.js";
 import { logger } from "../logger.js";
 
-export const statsRouter = Router();
+export const statsRouter: RouterType = Router();
 
 // Inline auth check — protects all /api/* routes if API_KEY is set
 statsRouter.use((req: Request, res: Response, next) => {
@@ -17,43 +17,85 @@ statsRouter.use((req: Request, res: Response, next) => {
 
 /**
  * GET /api/stats
- * Overview across all labels.
+ * Overview across all labels — includes lastSeen, topCountry per label.
  */
-statsRouter.get("/stats", async (req: Request, res: Response) => {
+statsRouter.get("/stats", async (_req: Request, res: Response) => {
   try {
-    const visits = await prisma.visit.findMany();
+    const [totalVisits, botVisits, uniqueResult, labelsRaw] =
+      await Promise.all([
+        prisma.visit.count(),
+        prisma.visit.count({ where: { isBot: true } }),
+        prisma.visit.findMany({
+          distinct: ["ipHash"],
+          select: { ipHash: true },
+        }),
+        prisma.visit.findMany({
+          select: {
+            label: true,
+            ipHash: true,
+            isBot: true,
+            country: true,
+            createdAt: true,
+          },
+        }),
+      ]);
 
-    const totalVisits = visits.length;
-    const uniqueIps = new Set(visits.map((v) => v.ipHash));
-    const botVisits = visits.filter((v) => v.isBot).length;
-
-    // Group by label
+    // Group by label with enriched data
     const labelMap = new Map<
       string,
-      { total: number; uniqueIps: Set<string>; bots: number }
+      {
+        total: number;
+        uniqueIps: Set<string>;
+        bots: number;
+        lastSeen: Date;
+        countries: Map<string, number>;
+      }
     >();
 
-    for (const v of visits) {
+    for (const v of labelsRaw) {
       let entry = labelMap.get(v.label);
       if (!entry) {
-        entry = { total: 0, uniqueIps: new Set(), bots: 0 };
+        entry = {
+          total: 0,
+          uniqueIps: new Set(),
+          bots: 0,
+          lastSeen: v.createdAt,
+          countries: new Map(),
+        };
         labelMap.set(v.label, entry);
       }
       entry.total++;
       entry.uniqueIps.add(v.ipHash);
       if (v.isBot) entry.bots++;
+      if (v.createdAt > entry.lastSeen) entry.lastSeen = v.createdAt;
+      const country = v.country ?? "Unknown";
+      entry.countries.set(country, (entry.countries.get(country) ?? 0) + 1);
     }
 
-    const labels = Array.from(labelMap.entries()).map(([label, data]) => ({
-      label,
-      total: data.total,
-      unique: data.uniqueIps.size,
-      bots: data.bots,
-    }));
+    const labels = Array.from(labelMap.entries()).map(([label, data]) => {
+      // Find the most frequent country
+      let topCountry = "Unknown";
+      let topCountryCount = 0;
+      for (const [country, count] of data.countries) {
+        if (count > topCountryCount) {
+          topCountry = country;
+          topCountryCount = count;
+        }
+      }
+
+      return {
+        label,
+        total: data.total,
+        unique: data.uniqueIps.size,
+        bots: data.bots,
+        lastSeen: data.lastSeen.toISOString(),
+        topCountry,
+      };
+    });
 
     res.json({
       totalVisits,
-      uniqueVisitors: uniqueIps.size,
+      uniqueVisitors: uniqueResult.length,
       botVisits,
       labels,
     });
@@ -72,29 +114,38 @@ statsRouter.get("/stats/:label", async (req: Request, res: Response) => {
     const { label } = req.params;
     const from = req.query.from as string | undefined;
     const to = req.query.to as string | undefined;
-    const includeBots = req.query.includeBots !== "false"; // default true
+    const includeBots = req.query.includeBots !== "false";
 
-    // Build date filter
+    const where: Record<string, unknown> = { label };
     const dateFilter: Record<string, Date> = {};
     if (from) dateFilter.gte = new Date(from);
     if (to) dateFilter.lte = new Date(to);
+    if (Object.keys(dateFilter).length > 0) where.createdAt = dateFilter;
+    if (!includeBots) where.isBot = false;
 
-    const visits = await prisma.visit.findMany({
-      where: {
-        label,
-        ...(Object.keys(dateFilter).length > 0
-          ? { createdAt: dateFilter }
-          : {}),
-        ...(!includeBots ? { isBot: false } : {}),
-      },
-      orderBy: { createdAt: "asc" },
-    });
+    const [visits, totalCount, botCount] = await Promise.all([
+      prisma.visit.findMany({
+        where,
+        select: {
+          ipHash: true,
+          country: true,
+          browser: true,
+          os: true,
+          deviceType: true,
+          isBot: true,
+          botName: true,
+          referer: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.visit.count({ where }),
+      prisma.visit.count({ where: { ...where, isBot: true } }),
+    ]);
 
-    const totalVisits = visits.length;
     const uniqueIps = new Set(visits.map((v) => v.ipHash));
-    const botVisits = visits.filter((v) => v.isBot).length;
 
-    // Timeline (group by date)
+    // Timeline
     const timelineMap = new Map<
       string,
       { visits: number; uniqueIps: Set<string> }
@@ -115,37 +166,31 @@ statsRouter.get("/stats/:label", async (req: Request, res: Response) => {
       unique: data.uniqueIps.size,
     }));
 
-    // Countries
-    const countryMap = new Map<string, number>();
-    for (const v of visits) {
-      const key = v.country ?? "Unknown";
-      countryMap.set(key, (countryMap.get(key) ?? 0) + 1);
+    function countBy<K extends string>(
+      key: K,
+      defaultLabel: string
+    ): Array<Record<K, string> & { visits: number }> {
+      const map = new Map<string, number>();
+      for (const v of visits) {
+        const val =
+          (v[key as keyof typeof v] as string | null) ?? defaultLabel;
+        map.set(val, (map.get(val) ?? 0) + 1);
+      }
+      return Array.from(map.entries())
+        .map(
+          ([name, count]) =>
+            ({ [key]: name, visits: count }) as Record<K, string> & {
+              visits: number;
+            }
+        )
+        .sort((a, b) => b.visits - a.visits);
     }
-    const countries = Array.from(countryMap.entries())
-      .map(([country, count]) => ({ country, visits: count }))
-      .sort((a, b) => b.visits - a.visits);
 
-    // Devices
-    const deviceMap = new Map<string, number>();
-    for (const v of visits) {
-      const key = v.deviceType ?? "unknown";
-      deviceMap.set(key, (deviceMap.get(key) ?? 0) + 1);
-    }
-    const devices = Array.from(deviceMap.entries())
-      .map(([deviceType, count]) => ({ deviceType, visits: count }))
-      .sort((a, b) => b.visits - a.visits);
+    const countries = countBy("country", "Unknown");
+    const devices = countBy("deviceType", "unknown");
+    const browsers = countBy("browser", "Unknown");
+    const operatingSystems = countBy("os", "Unknown");
 
-    // Browsers
-    const browserMap = new Map<string, number>();
-    for (const v of visits) {
-      const key = v.browser ?? "Unknown";
-      browserMap.set(key, (browserMap.get(key) ?? 0) + 1);
-    }
-    const browsers = Array.from(browserMap.entries())
-      .map(([browser, count]) => ({ browser, visits: count }))
-      .sort((a, b) => b.visits - a.visits);
-
-    // Top bots
     const botMap = new Map<string, number>();
     for (const v of visits) {
       if (v.isBot && v.botName) {
@@ -156,7 +201,6 @@ statsRouter.get("/stats/:label", async (req: Request, res: Response) => {
       .map(([botName, count]) => ({ botName, visits: count }))
       .sort((a, b) => b.visits - a.visits);
 
-    // Referers
     const refererMap = new Map<string, number>();
     for (const v of visits) {
       if (v.referer) {
@@ -169,18 +213,74 @@ statsRouter.get("/stats/:label", async (req: Request, res: Response) => {
 
     res.json({
       label,
-      total: totalVisits,
+      total: totalCount,
       unique: uniqueIps.size,
-      bots: botVisits,
+      bots: botCount,
       timeline,
       countries,
       devices,
       browsers,
+      operatingSystems,
       topBots,
       referers,
     });
   } catch (error) {
-    logger.error({ error, label: req.params.label }, "Failed to fetch label stats");
+    logger.error(
+      { error, label: req.params.label },
+      "Failed to fetch label stats"
+    );
     res.status(500).json({ error: "Failed to fetch stats" });
+  }
+});
+
+/**
+ * DELETE /api/stats/:label
+ * Deletes ALL visits for a single label.
+ */
+statsRouter.delete("/stats/:label", async (req: Request, res: Response) => {
+  try {
+    const label = String(req.params.label);
+
+    const result = await prisma.visit.deleteMany({
+      where: { label },
+    });
+
+    logger.info({ label, deleted: result.count }, "Deleted label visits");
+    res.json({ label, deleted: result.count });
+  } catch (error) {
+    logger.error(
+      { error, label: req.params.label },
+      "Failed to delete label"
+    );
+    res.status(500).json({ error: "Failed to delete label" });
+  }
+});
+
+/**
+ * DELETE /api/stats
+ * Batch delete — removes ALL visits for the given labels.
+ * Body: { labels: string[] }
+ */
+statsRouter.delete("/stats", async (req: Request, res: Response) => {
+  try {
+    const { labels } = req.body as { labels?: string[] };
+
+    if (!Array.isArray(labels) || labels.length === 0) {
+      res.status(400).json({ error: "labels array is required" });
+      return;
+    }
+
+    const result = await prisma.visit.deleteMany({
+      where: { label: { in: labels } },
+    });
+
+    logger.info(
+      { labels, deleted: result.count },
+      "Batch deleted label visits"
+    );
+    res.json({ labels, deleted: result.count });
+  } catch (error) {
+    logger.error({ error }, "Failed to batch delete labels");
+    res.status(500).json({ error: "Failed to batch delete" });
   }
 });

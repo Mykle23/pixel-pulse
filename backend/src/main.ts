@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
@@ -10,6 +11,17 @@ import { healthRoute } from "./routes/health.route.js";
 import { statsRouter } from "./routes/stats.route.js";
 
 const app = express();
+
+// Trust proxy so req.ip reads X-Forwarded-For in production
+app.set("trust proxy", 1);
+
+// CORS — allow the frontend dev server and any same-origin requests
+app.use(
+  cors({
+    origin: env.nodeEnv === "production" ? false : true,
+    credentials: true,
+  })
+);
 
 // Security headers
 app.use(helmet());

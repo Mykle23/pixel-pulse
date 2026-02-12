@@ -14,12 +14,17 @@ export function clearApiKey(): void {
   localStorage.removeItem(API_KEY_STORAGE);
 }
 
-async function apiFetch<T>(path: string): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  options?: RequestInit
+): Promise<T> {
   const key = getApiKey();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
   if (key) headers.Authorization = `Bearer ${key}`;
 
-  const res = await fetch(path, { headers });
+  const res = await fetch(path, { ...options, headers });
 
   if (res.status === 401) {
     throw new ApiError("Unauthorized", 401);
@@ -34,12 +39,12 @@ async function apiFetch<T>(path: string): Promise<T> {
 }
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number
-  ) {
+  status: number;
+
+  constructor(message: string, status: number) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
   }
 }
 
@@ -61,4 +66,22 @@ export function fetchLabelStats(
 
 export function fetchHealth(): Promise<HealthStatus> {
   return apiFetch("/health");
+}
+
+export function deleteLabel(
+  label: string
+): Promise<{ label: string; deleted: number }> {
+  return apiFetch(`/api/stats/${encodeURIComponent(label)}`, {
+    method: "DELETE",
+  });
+}
+
+export function deleteLabels(
+  labels: string[]
+): Promise<{ labels: string[]; deleted: number }> {
+  return apiFetch("/api/stats", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ labels }),
+  });
 }
