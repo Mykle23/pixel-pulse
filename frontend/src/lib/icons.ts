@@ -63,7 +63,7 @@ export function deviceIcon(name: string): string {
   return DEVICE_ICONS[name.toLowerCase()] ?? "🖥️";
 }
 
-export function botIcon(_name: string): string {
+export function botIcon(): string {
   return "🤖";
 }
 

@@ -14,7 +14,7 @@ function setNoCacheHeaders(res: Response): void {
  * Serves a 1x1 transparent GIF and registers the visit asynchronously.
  */
 export function pixelGifRoute(req: Request, res: Response): void {
-  const label = req.params.label;
+  const label = String(req.params.label ?? "");
   if (!label) {
     res.status(400).end();
     return;
@@ -34,7 +34,7 @@ export function pixelGifRoute(req: Request, res: Response): void {
  * Serves a 1x1 transparent SVG and registers the visit asynchronously.
  */
 export function pixelSvgRoute(req: Request, res: Response): void {
-  const label = req.params.label;
+  const label = String(req.params.label ?? "");
   if (!label) {
     res.status(400).end();
     return;

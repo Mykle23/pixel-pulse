@@ -1,10 +1,10 @@
-import { Router } from "express";
+import { type Router as RouterType, Router } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../db.js";
 import { env } from "../config/env.js";
 import { logger } from "../logger.js";
 
-export const analyticsRouter = Router();
+export const analyticsRouter: RouterType = Router();
 
 // Auth — same as statsRouter
 analyticsRouter.use((req: Request, res: Response, next) => {

@@ -43,6 +43,7 @@ export function LabelDetail() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const navigate = useNavigate();
 
+  // Keep load as callback for event handlers (onRetry)
   const load = useCallback(() => {
     if (!name) return;
     setLoading(true);
@@ -68,17 +69,49 @@ export function LabelDetail() {
       .finally(() => setLoading(false));
   }, [name, range, navigate]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Reset loading when fetch deps change (state-during-render pattern)
+  const fetchKey = `${name}|${range}`;
+  const [prevFetchKey, setPrevFetchKey] = useState(fetchKey);
+  if (fetchKey !== prevFetchKey) {
+    setPrevFetchKey(fetchKey);
+    setLoading(true);
+    setError(null);
+  }
 
-  // Auto-refresh: immediate fetch on toggle + interval
+  // Initial + re-fetch — inline to avoid synchronous setState in effect
+  useEffect(() => {
+    if (!name) return;
+    let cancelled = false;
+
+    const params: { from?: string } = {};
+    const days = DATE_RANGES[range].days;
+    if (days > 0) {
+      const from = new Date();
+      from.setDate(from.getDate() - days);
+      params.from = from.toISOString().split("T")[0];
+    }
+
+    fetchLabelStats(name, params)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          navigate("/login");
+          return;
+        }
+        setError(err.message);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [name, range, navigate]);
+
+  // Auto-refresh — setTimeout avoids direct setState in effect body
   useEffect(() => {
     if (!autoRefresh) return;
-    load();
+    const t = setTimeout(load, 0);
     const interval = setInterval(load, 15_000);
-    return () => clearInterval(interval);
-  }, [autoRefresh]); // intentionally exclude `load`
+    return () => { clearTimeout(t); clearInterval(interval); };
+  }, [autoRefresh, load]);
 
   if (loading && !data) return <Spinner />;
   if (error && !data) return <ErrorMessage message={error} onRetry={load} />;

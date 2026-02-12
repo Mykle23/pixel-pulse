@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Copy, Check, Award, Palette, X, Radio } from "lucide-react";
 import { usePreset } from "../context/badge-preset";
 
@@ -137,13 +137,11 @@ export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
   const [trackingFocused, setTrackingFocused] = useState(false);
   const [logoFocused, setLogoFocused] = useState(false);
   const [presetName, setPresetName] = useState<string | null>(null);
-  const consumedRef = useRef<string | null>(null);
+  // Consume preset from context when gallery pushes one (state-during-render pattern)
+  const [prevPresetName, setPrevPresetName] = useState<string | null>(null);
 
-  // Consume preset from context when gallery pushes one
-  useEffect(() => {
-    if (!pending) return;
-    if (consumedRef.current === pending.name) return;
-    consumedRef.current = pending.name;
+  if (pending && prevPresetName !== pending.name) {
+    setPrevPresetName(pending.name);
 
     // Presets with empty message → single-section badge (message = label text)
     if (pending.message) {
@@ -163,7 +161,7 @@ export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
     setLogoColor(pending.logoColor || "white");
     setPresetName(pending.name);
     consume();
-  }, [pending, consume]);
+  }
 
   const trimmed = trackingLabel.trim();
   const hasTrackingLabel = trimmed.length > 0;

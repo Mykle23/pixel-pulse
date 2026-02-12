@@ -95,7 +95,7 @@ export function Dashboard() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
 
-  // Data loading
+  // Data loading — kept as callback for event handlers (onRetry, after delete)
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -111,16 +111,29 @@ export function Dashboard() {
       .finally(() => setLoading(false));
   }, [navigate]);
 
+  // Initial fetch — inline to avoid synchronous setState in effect
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+    fetchOverview()
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.status === 401) {
+          navigate("/login");
+          return;
+        }
+        setError(err.message);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [navigate]);
 
+  // Auto-refresh — setTimeout avoids direct setState in effect body
   useEffect(() => {
     if (!autoRefresh) return;
-    load();
+    const t = setTimeout(load, 0);
     const interval = setInterval(load, 15_000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { clearTimeout(t); clearInterval(interval); };
   }, [autoRefresh, load]);
 
   // Pipeline: filter -> sort -> paginate
@@ -147,9 +160,13 @@ export function Dashboard() {
     safePage * pageSize
   );
 
-  // Reset page on filter/sort change
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setPage(1); }, [search, sortBy, sortDir, pageSize]);
+  // Reset page on filter/sort change (state-during-render pattern)
+  const filterKey = `${search}|${sortBy}|${sortDir}|${pageSize}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setPage(1);
+  }
 
   // Selection helpers
   const allOnPageSelected =

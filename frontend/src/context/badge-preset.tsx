@@ -30,6 +30,7 @@ export function BadgePresetProvider({ children }: { children: React.ReactNode })
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function usePreset(): BadgePresetState {
   const ctx = useContext(BadgePresetContext);
   if (!ctx) throw new Error("usePreset must be used inside BadgePresetProvider");

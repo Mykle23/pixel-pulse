@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   AreaChart,
@@ -106,26 +106,35 @@ export function Analytics() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [retryKey, setRetryKey] = useState(0);
   const navigate = useNavigate();
 
-  const load = useCallback(() => {
+  // Reset loading when deps change (state-during-render pattern)
+  const fetchKey = `${days}|${retryKey}`;
+  const [prevFetchKey, setPrevFetchKey] = useState(fetchKey);
+  if (prevFetchKey !== fetchKey) {
+    setPrevFetchKey(fetchKey);
     setLoading(true);
     setError(null);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
     fetchAnalytics(days)
-      .then(setData)
+      .then((d) => { if (!cancelled) setData(d); })
       .catch((err) => {
+        if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) {
           navigate("/login");
           return;
         }
         setError(err.message);
       })
-      .finally(() => setLoading(false));
-  }, [days, navigate]);
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [days, retryKey, navigate]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const retry = () => setRetryKey((k) => k + 1);
 
   // Build country lookup: alpha-2 → visits
   const countryLookup = useMemo(() => {
@@ -169,7 +178,7 @@ export function Analytics() {
   }, [data]);
 
   if (loading && !data) return <Spinner />;
-  if (error && !data) return <ErrorMessage message={error} onRetry={load} />;
+  if (error && !data) return <ErrorMessage message={error} onRetry={retry} />;
   if (!data) return null;
 
   return (
