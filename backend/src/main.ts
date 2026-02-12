@@ -9,6 +9,7 @@ import { pixelGifRoute, pixelSvgRoute } from "./routes/pixel.route.js";
 import { badgeRoute } from "./routes/badge.route.js";
 import { healthRoute } from "./routes/health.route.js";
 import { statsRouter } from "./routes/stats.route.js";
+import { analyticsRouter } from "./routes/analytics.route.js";
 
 const app = express();
 
@@ -59,10 +60,10 @@ const pixelLimiter = rateLimit({
   },
 });
 
-// Rate limiting for stats API (per IP)
+// Rate limiting for stats/analytics API (per IP)
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 30, // 30 requests per IP per minute
+  max: 120, // 120 requests per IP per minute
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -81,6 +82,7 @@ app.get(
 );
 app.get("/health", healthRoute);
 app.use("/api", apiLimiter, statsRouter);
+app.use("/api", apiLimiter, analyticsRouter);
 
 // 404 handler
 app.use((_req: express.Request, res: express.Response) => {

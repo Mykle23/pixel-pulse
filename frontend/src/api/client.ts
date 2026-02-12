@@ -1,4 +1,4 @@
-import type { StatsOverview, LabelStats, HealthStatus } from "./types";
+import type { StatsOverview, LabelStats, HealthStatus, AnalyticsData } from "./types";
 
 const API_KEY_STORAGE = "pixelpulse-api-key";
 
@@ -74,6 +74,10 @@ export function deleteLabel(
   return apiFetch(`/api/stats/${encodeURIComponent(label)}`, {
     method: "DELETE",
   });
+}
+
+export function fetchAnalytics(days = 30): Promise<AnalyticsData> {
+  return apiFetch(`/api/analytics?days=${days}`);
 }
 
 export function deleteLabels(

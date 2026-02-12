@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router";
-import { Activity, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { Activity, LayoutDashboard, BarChart3, LogOut, Menu, X } from "lucide-react";
 import { clearApiKey } from "../api/client";
 
 export function Layout() {
@@ -52,6 +52,12 @@ export function Layout() {
             to="/"
             icon={<LayoutDashboard size={15} />}
             label="Dashboard"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <SidebarLink
+            to="/analytics"
+            icon={<BarChart3 size={15} />}
+            label="Analytics"
             onClick={() => setSidebarOpen(false)}
           />
         </nav>

@@ -70,3 +70,51 @@ export interface HealthStatus {
   totalLabels: number;
   timestamp: string;
 }
+
+/* ------------------------------------------------------------------ */
+/* Analytics                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface AnalyticsSummary {
+  totalVisits: number;
+  uniqueVisitors: number;
+  botVisits: number;
+  humanVisits: number;
+  totalLabels: number;
+}
+
+export interface AnalyticsLabel {
+  label: string;
+  total: number;
+  unique: number;
+  bots: number;
+  growth: number;
+}
+
+export interface AnalyticsCountry {
+  country: string;
+  visits: number;
+}
+
+export interface AnalyticsHourly {
+  hour: number;
+  visits: number;
+}
+
+export interface AnalyticsNameValue {
+  name: string;
+  visits: number;
+}
+
+export interface AnalyticsData {
+  summary: AnalyticsSummary;
+  labels: AnalyticsLabel[];
+  topLabels: string[];
+  timeline: Array<Record<string, number | string>>;
+  countries: AnalyticsCountry[];
+  browsers: AnalyticsNameValue[];
+  operatingSystems: AnalyticsNameValue[];
+  devices: AnalyticsNameValue[];
+  hourly: AnalyticsHourly[];
+  referers: AnalyticsNameValue[];
+}
