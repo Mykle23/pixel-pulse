@@ -70,7 +70,15 @@ const apiLimiter = rateLimit({
 // Routes
 app.get("/pixel/:label.gif", pixelLimiter, pixelGifRoute);
 app.get("/pixel/:label.svg", pixelLimiter, pixelSvgRoute);
-app.get("/badge/:label.svg", pixelLimiter, badgeRoute);
+// Badge previews (?preview=true) skip rate limiting — the gallery loads many at once
+app.get(
+  "/badge/:label.svg",
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (String(req.query.preview ?? "") === "true") return next();
+    return pixelLimiter(req, res, next);
+  },
+  badgeRoute
+);
 app.get("/health", healthRoute);
 app.use("/api", apiLimiter, statsRouter);
 

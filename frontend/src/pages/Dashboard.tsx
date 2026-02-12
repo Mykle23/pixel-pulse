@@ -22,6 +22,7 @@ import { SignalDot } from "../components/SignalDot";
 import { Spinner } from "../components/Spinner";
 import { ErrorMessage } from "../components/ErrorMessage";
 import { BadgeCreator } from "../components/BadgeCreator";
+import { BadgePresetGallery } from "../components/BadgePresetGallery";
 import { countryFlag } from "../lib/icons";
 
 /* ------------------------------------------------------------------ */
@@ -218,7 +219,7 @@ export function Dashboard() {
   if (!data) return null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 sm:py-8">
       {/* Page header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight text-[var(--color-ink)]">
@@ -242,22 +243,24 @@ export function Dashboard() {
         </button>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs — full width */}
       <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
         <KpiCard label="Total Visits" value={data.totalVisits} icon={<Eye size={14} />} />
         <KpiCard label="Unique Visitors" value={data.uniqueVisitors} icon={<Users size={14} />} accentClass="text-[var(--color-human-text)]" />
         <KpiCard label="Bot Visits" value={data.botVisits} icon={<Bot size={14} />} accentClass="text-[var(--color-bot-text)]" />
       </div>
 
-      {/* Badge Creator */}
-      <div className="mb-6">
-        <BadgeCreator existingLabels={data.labels.map((l) => l.label)} />
-      </div>
+      {/* Two-column: main content (left) + preset sidebar (right) */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
+        {/* ─── Left column: Creator + Labels table ─── */}
+        <div className="min-w-0 space-y-6">
+          {/* Badge Creator */}
+          <div id="badge-creator">
+            <BadgeCreator existingLabels={data.labels.map((l) => l.label)} />
+          </div>
 
-      {/* ============================================================= */}
-      {/* Labels table                                                    */}
-      {/* ============================================================= */}
-      <div className="rounded-[var(--radius-md)] border border-[var(--color-edge)] bg-[var(--color-surface-1)]">
+          {/* Labels table */}
+          <div className="rounded-[var(--radius-md)] border border-[var(--color-edge)] bg-[var(--color-surface-1)]">
         {/* Toolbar: search + filters */}
         <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-edge)] px-4 py-2">
           <Search size={13} className="shrink-0 text-[var(--color-ink-muted)]" />
@@ -501,7 +504,12 @@ export function Dashboard() {
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </div>{/* end left column */}
+
+        {/* ─── Right column: Preset gallery ─── */}
+        <BadgePresetGallery />
+      </div>{/* end two-column grid */}
     </div>
   );
 }

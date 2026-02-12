@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { Copy, Check, Award, Palette } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Copy, Check, Award, Palette, X, Radio } from "lucide-react";
+import { usePreset } from "../context/badge-preset";
 
 interface BadgeCreatorProps {
   existingLabels: string[];
@@ -9,12 +10,13 @@ interface BadgeCreatorProps {
 /* Badge modes                                                         */
 /* ------------------------------------------------------------------ */
 
-type BadgeMode = "static-single" | "static-double" | "counter";
+type BadgeMode = "static-single" | "static-double" | "counter" | "pixel";
 
 const BADGE_MODES = [
   { value: "static-single" as const, name: "One text", desc: "Message only" },
   { value: "static-double" as const, name: "Two texts", desc: "Label + message" },
   { value: "counter" as const, name: "Counter", desc: "Dynamic visits" },
+  { value: "pixel" as const, name: "Pixel", desc: "Invisible tracker" },
 ] as const;
 
 /* ------------------------------------------------------------------ */
@@ -67,7 +69,6 @@ function buildQs(params: Record<string, string>, preview: boolean): string {
   const qs = new URLSearchParams();
   if (preview) qs.set("preview", "true");
   for (const [k, v] of Object.entries(params)) {
-    // Allow empty strings (e.g. label="" for message-only badges)
     if (v !== undefined) qs.set(k, v);
   }
   const str = qs.toString();
@@ -85,6 +86,9 @@ function getQueryParams(
   logoColor: string,
   link: string
 ): Record<string, string> {
+  // Pixel mode has no query params for badges
+  if (mode === "pixel") return {};
+
   const params: Record<string, string> = {};
 
   if (style !== "flat") params.style = style;
@@ -117,6 +121,8 @@ function getQueryParams(
 /* ------------------------------------------------------------------ */
 
 export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
+  const { pending, consume } = usePreset();
+
   const [mode, setMode] = useState<BadgeMode>("static-double");
   const [trackingLabel, setTrackingLabel] = useState("repository-name");
   const [labelText, setLabelText] = useState("Mykle23");
@@ -130,20 +136,64 @@ export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [trackingFocused, setTrackingFocused] = useState(false);
   const [logoFocused, setLogoFocused] = useState(false);
+  const [presetName, setPresetName] = useState<string | null>(null);
+  const consumedRef = useRef<string | null>(null);
+
+  // Consume preset from context when gallery pushes one
+  useEffect(() => {
+    if (!pending) return;
+    if (consumedRef.current === pending.name) return;
+    consumedRef.current = pending.name;
+
+    // Presets with empty message → single-section badge (message = label text)
+    if (pending.message) {
+      setMode("static-double");
+      setLabelText(pending.label);
+      setMessageText(pending.message);
+    } else {
+      setMode("static-single");
+      setMessageText(pending.label); // label text becomes the message in single mode
+      setLabelText("Mykle23");
+    }
+
+    setColor(pending.color || "blue");
+    setStyle(pending.style || "flat");
+    setLabelColor(pending.labelColor);
+    setLogo(pending.logo);
+    setLogoColor(pending.logoColor || "white");
+    setPresetName(pending.name);
+    consume();
+  }, [pending, consume]);
 
   const trimmed = trackingLabel.trim();
   const hasTrackingLabel = trimmed.length > 0;
+  const isPixelMode = mode === "pixel";
 
-  const qp = getQueryParams(mode, color, style, labelText, messageText, labelColor, logo.trim(), logoColor, link.trim());
-  const badgePath = `/badge/${encodeURIComponent(trimmed)}.svg`;
+  // Badge URL
+  const qp = isPixelMode ? {} : getQueryParams(mode, color, style, labelText, messageText, labelColor, logo.trim(), logoColor, link.trim());
+  const badgePath = isPixelMode
+    ? `/pixel/${encodeURIComponent(trimmed)}.svg`
+    : `/badge/${encodeURIComponent(trimmed)}.svg`;
   const publicUrl = hasTrackingLabel ? `${badgePath}${buildQs(qp, false)}` : "";
-  const previewUrl = hasTrackingLabel ? `${badgePath}${buildQs(qp, true)}` : "";
+  const previewUrl = hasTrackingLabel && !isPixelMode ? `${badgePath}${buildQs(qp, true)}` : "";
   const fullUrl = `${window.location.origin}${publicUrl}`;
 
-  const altText = mode === "static-single" ? messageText : labelText;
+  const altText = mode === "static-single" ? (messageText || "badge") : (labelText || "badge");
   const hasLink = link.trim().length > 0;
-  const markdownSnippet = hasLink ? `[![${altText}](${fullUrl})](${link.trim()})` : `![${altText}](${fullUrl})`;
-  const htmlSnippet = hasLink ? `<a href="${link.trim()}"><img src="${fullUrl}" alt="${altText}" /></a>` : `<img src="${fullUrl}" alt="${altText}" />`;
+
+  // Snippets
+  let markdownSnippet = "";
+  let htmlSnippet = "";
+  if (isPixelMode) {
+    markdownSnippet = `![](${fullUrl})`;
+    htmlSnippet = `<img src="${fullUrl}" width="1" height="1" alt="" />`;
+  } else if (hasLink) {
+    markdownSnippet = `[![${altText}](${fullUrl})](${link.trim()})`;
+    htmlSnippet = `<a href="${link.trim()}"><img src="${fullUrl}" alt="${altText}" /></a>`;
+  } else {
+    markdownSnippet = `![${altText}](${fullUrl})`;
+    htmlSnippet = `<img src="${fullUrl}" alt="${altText}" />`;
+  }
 
   function copySnippet(key: string, value: string) {
     navigator.clipboard.writeText(value).then(() => {
@@ -161,11 +211,27 @@ export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
     : [];
 
   return (
-    <div className="rounded-[var(--radius-md)] border border-[var(--color-edge)] bg-[var(--color-surface-1)] px-4 py-4 sm:px-5 sm:py-5">
+    <div className="min-w-0 rounded-[var(--radius-md)] border border-[var(--color-edge)] bg-[var(--color-surface-1)] px-4 py-4 sm:px-5 sm:py-5">
       <h2 className="mb-4 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-[var(--color-ink-tertiary)]">
         <Award size={12} />
         Create Badge
       </h2>
+
+      {/* Preset indicator */}
+      {presetName && (
+        <div className="mb-3 flex items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--color-signal-muted)] bg-[var(--color-signal-muted)] px-2.5 py-1.5">
+          <span className="flex-1 text-[11px] text-[var(--color-signal-text)]">
+            Using preset: <strong>{presetName}</strong>
+          </span>
+          <button
+            onClick={() => setPresetName(null)}
+            className="text-[var(--color-signal-text)] opacity-60 transition-opacity duration-100 hover:opacity-100"
+            aria-label="Dismiss preset indicator"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Mode selector */}
       <div className="mb-4">
@@ -190,105 +256,139 @@ export function BadgeCreator({ existingLabels }: BadgeCreatorProps) {
         </div>
       </div>
 
-      {/* Row 1: Tracking label + text fields (dynamic per mode) */}
-      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="relative">
-          <FieldLabel htmlFor="badge-tracking-label">Tracking label</FieldLabel>
-          <input
-            id="badge-tracking-label"
-            type="text"
-            value={trackingLabel}
-            onChange={(e) => setTrackingLabel(e.target.value)}
-            onFocus={() => setTrackingFocused(true)}
-            onBlur={() => setTimeout(() => setTrackingFocused(false), 150)}
-            className={INPUT_CLASS}
-            placeholder="repository-name"
-            autoComplete="off"
-          />
-          {trackingFocused && labelSuggestions.length > 0 && (
-            <SuggestionList items={labelSuggestions.slice(0, 5)} onSelect={(v) => { setTrackingLabel(v); setTrackingFocused(false); }} />
-          )}
-        </div>
-
-        {mode !== "static-single" && (
-          <div>
-            <FieldLabel htmlFor="badge-label-text">Label text</FieldLabel>
-            <input id="badge-label-text" type="text" value={labelText} onChange={(e) => setLabelText(e.target.value)} className={INPUT_CLASS} placeholder="Mykle23" />
+      {/* Pixel mode — simplified */}
+      {isPixelMode && (
+        <div className="mb-3">
+          <div className="relative">
+            <FieldLabel htmlFor="badge-tracking-label">Tracking label</FieldLabel>
+            <input
+              id="badge-tracking-label"
+              type="text"
+              value={trackingLabel}
+              onChange={(e) => setTrackingLabel(e.target.value)}
+              onFocus={() => setTrackingFocused(true)}
+              onBlur={() => setTimeout(() => setTrackingFocused(false), 150)}
+              className={INPUT_CLASS}
+              placeholder="repository-name"
+              autoComplete="off"
+            />
+            {trackingFocused && labelSuggestions.length > 0 && (
+              <SuggestionList items={labelSuggestions.slice(0, 5)} onSelect={(v) => { setTrackingLabel(v); setTrackingFocused(false); }} />
+            )}
           </div>
-        )}
-
-        {mode !== "counter" && (
-          <div>
-            <FieldLabel htmlFor="badge-message-text">Message text</FieldLabel>
-            <input id="badge-message-text" type="text" value={messageText} onChange={(e) => setMessageText(e.target.value)} className={INPUT_CLASS} placeholder={mode === "static-single" ? "optional (icon-only if empty)" : "PixelPulse"} />
+          <div className="mt-3 flex items-center gap-2 rounded-[var(--radius-sm)] bg-[var(--color-surface-inset)] px-3 py-3 text-[11px] text-[var(--color-ink-secondary)]">
+            <Radio size={14} className="shrink-0 text-[var(--color-signal)]" />
+            Invisible 1x1 SVG pixel. Embed in READMEs, emails, or HTML pages to silently track views.
           </div>
-        )}
-      </div>
-
-      {/* Row 2: Color + Style */}
-      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div>
-          <span className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-ink-tertiary)]">
-            <Palette size={10} /> Color
-          </span>
-          <ChipGroup items={BADGE_COLORS} selected={color} onSelect={setColor} />
         </div>
-        <div>
-          <span className="mb-1.5 block text-[11px] font-medium text-[var(--color-ink-tertiary)]">Style</span>
-          <ChipGroup items={BADGE_STYLES} selected={style} onSelect={setStyle} />
-        </div>
-      </div>
+      )}
 
-      {/* Row 3: Label color */}
-      <div className="mb-3">
-        <span className="mb-1.5 block text-[11px] font-medium text-[var(--color-ink-tertiary)]">Label color</span>
-        <ChipGroup items={LABEL_COLORS} selected={labelColor} onSelect={setLabelColor} />
-      </div>
+      {/* Badge mode fields */}
+      {!isPixelMode && (
+        <>
+          {/* Row 1: Tracking label + text fields */}
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="relative">
+              <FieldLabel htmlFor="badge-tracking-label">Tracking label</FieldLabel>
+              <input
+                id="badge-tracking-label"
+                type="text"
+                value={trackingLabel}
+                onChange={(e) => setTrackingLabel(e.target.value)}
+                onFocus={() => setTrackingFocused(true)}
+                onBlur={() => setTimeout(() => setTrackingFocused(false), 150)}
+                className={INPUT_CLASS}
+                placeholder="repository-name"
+                autoComplete="off"
+              />
+              {trackingFocused && labelSuggestions.length > 0 && (
+                <SuggestionList items={labelSuggestions.slice(0, 5)} onSelect={(v) => { setTrackingLabel(v); setTrackingFocused(false); }} />
+              )}
+            </div>
 
-      {/* Row 4: Logo + Logo color + Link */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="relative">
-          <FieldLabel htmlFor="badge-logo">Logo</FieldLabel>
-          <input
-            id="badge-logo"
-            type="text"
-            value={logo}
-            onChange={(e) => setLogo(e.target.value)}
-            onFocus={() => setLogoFocused(true)}
-            onBlur={() => setTimeout(() => setLogoFocused(false), 150)}
-            className={INPUT_CLASS}
-            placeholder="github"
-            autoComplete="off"
-          />
-          {logoFocused && logoSuggestions.length > 0 && (
-            <SuggestionList items={logoSuggestions.slice(0, 6)} onSelect={(v) => { setLogo(v); setLogoFocused(false); }} />
-          )}
-          <p className="mt-1 text-[10px] text-[var(--color-ink-muted)]">
-            <a href="https://simpleicons.org" target="_blank" rel="noopener noreferrer" className="text-[var(--color-signal-text)] hover:underline">
-              Browse icons
-            </a>
-          </p>
-        </div>
+            {mode !== "static-single" && (
+              <div>
+                <FieldLabel htmlFor="badge-label-text">Label text</FieldLabel>
+                <input id="badge-label-text" type="text" value={labelText} onChange={(e) => setLabelText(e.target.value)} className={INPUT_CLASS} placeholder="Mykle23" />
+              </div>
+            )}
 
-        <div>
-          <FieldLabel htmlFor="badge-logo-color">Logo color</FieldLabel>
-          <input id="badge-logo-color" type="text" value={logoColor} onChange={(e) => setLogoColor(e.target.value)} className={INPUT_CLASS} placeholder="white" />
-        </div>
+            {mode !== "counter" && (
+              <div>
+                <FieldLabel htmlFor="badge-message-text">Message text</FieldLabel>
+                <input id="badge-message-text" type="text" value={messageText} onChange={(e) => setMessageText(e.target.value)} className={INPUT_CLASS} placeholder={mode === "static-single" ? "optional (icon-only if empty)" : "PixelPulse"} />
+              </div>
+            )}
+          </div>
 
-        <div>
-          <FieldLabel htmlFor="badge-link">Link URL</FieldLabel>
-          <input id="badge-link" type="text" value={link} onChange={(e) => setLink(e.target.value)} className={INPUT_CLASS} placeholder="https://github.com/..." />
-        </div>
-      </div>
+          {/* Row 2: Color + Style */}
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <span className="mb-1.5 flex items-center gap-1 text-[11px] font-medium text-[var(--color-ink-tertiary)]">
+                <Palette size={10} /> Color
+              </span>
+              <ChipGroup items={BADGE_COLORS} selected={color} onSelect={setColor} />
+            </div>
+            <div>
+              <span className="mb-1.5 block text-[11px] font-medium text-[var(--color-ink-tertiary)]">Style</span>
+              <ChipGroup items={BADGE_STYLES} selected={style} onSelect={setStyle} />
+            </div>
+          </div>
+
+          {/* Row 3: Label color */}
+          <div className="mb-3">
+            <span className="mb-1.5 block text-[11px] font-medium text-[var(--color-ink-tertiary)]">Label color</span>
+            <ChipGroup items={LABEL_COLORS} selected={labelColor} onSelect={setLabelColor} />
+          </div>
+
+          {/* Row 4: Logo + Logo color + Link */}
+          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="relative">
+              <FieldLabel htmlFor="badge-logo">Logo</FieldLabel>
+              <input
+                id="badge-logo"
+                type="text"
+                value={logo}
+                onChange={(e) => setLogo(e.target.value)}
+                onFocus={() => setLogoFocused(true)}
+                onBlur={() => setTimeout(() => setLogoFocused(false), 150)}
+                className={INPUT_CLASS}
+                placeholder="github"
+                autoComplete="off"
+              />
+              {logoFocused && logoSuggestions.length > 0 && (
+                <SuggestionList items={logoSuggestions.slice(0, 6)} onSelect={(v) => { setLogo(v); setLogoFocused(false); }} />
+              )}
+              <p className="mt-1 text-[10px] text-[var(--color-ink-muted)]">
+                <a href="https://simpleicons.org" target="_blank" rel="noopener noreferrer" className="text-[var(--color-signal-text)] hover:underline">
+                  Browse icons
+                </a>
+              </p>
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="badge-logo-color">Logo color</FieldLabel>
+              <input id="badge-logo-color" type="text" value={logoColor} onChange={(e) => setLogoColor(e.target.value)} className={INPUT_CLASS} placeholder="white" />
+            </div>
+
+            <div>
+              <FieldLabel htmlFor="badge-link">Link URL</FieldLabel>
+              <input id="badge-link" type="text" value={link} onChange={(e) => setLink(e.target.value)} className={INPUT_CLASS} placeholder="https://github.com/..." />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Preview + snippets */}
       {hasTrackingLabel && (
         <>
-          <div className="mb-4 flex items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-edge-subtle)] bg-[var(--color-surface-inset)] py-5">
-            <img src={previewUrl} alt="Badge preview" className="h-6" key={previewUrl} />
-          </div>
+          {!isPixelMode && previewUrl && (
+            <div className="mb-4 flex items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-edge-subtle)] bg-[var(--color-surface-inset)] py-5">
+              <img src={previewUrl} alt="Badge preview" className="h-6" key={previewUrl} />
+            </div>
+          )}
 
-          <div className="space-y-2 border-t border-[var(--color-edge)] pt-3">
+          <div className="min-w-0 space-y-2 border-t border-[var(--color-edge)] pt-3">
             <CopyRow label="Markdown" code={markdownSnippet} copied={copiedField === "md"} onCopy={() => copySnippet("md", markdownSnippet)} />
             <CopyRow label="HTML" code={htmlSnippet} copied={copiedField === "html"} onCopy={() => copySnippet("html", htmlSnippet)} />
             <CopyRow label="URL" code={fullUrl} copied={copiedField === "url"} onCopy={() => copySnippet("url", fullUrl)} />
@@ -358,9 +458,9 @@ function SuggestionList({ items, onSelect }: { items: string[]; onSelect: (value
 
 function CopyRow({ label, code, copied, onCopy }: { label: string; code: string; copied: boolean; onCopy: () => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <span className="w-16 shrink-0 text-[11px] text-[var(--color-ink-tertiary)]">{label}</span>
-      <pre className="flex-1 overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-edge)] bg-[var(--color-surface-inset)] px-2.5 py-1.5 font-mono text-[11px] text-[var(--color-ink-secondary)]">
+      <pre className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--radius-sm)] border border-[var(--color-edge)] bg-[var(--color-surface-inset)] px-2.5 py-1.5 font-mono text-[11px] text-[var(--color-ink-secondary)]">
         {code}
       </pre>
       <button

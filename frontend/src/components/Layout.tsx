@@ -37,7 +37,6 @@ export function Layout() {
               PixelPulse
             </span>
           </div>
-          {/* Close button on mobile */}
           <button
             className="flex items-center justify-center text-[var(--color-ink-tertiary)] md:hidden"
             onClick={() => setSidebarOpen(false)}
